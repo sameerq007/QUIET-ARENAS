@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Cyber Strike 2077 - Racing Game</title>
+    <link rel="stylesheet" href="style.css" />
+    <style>
+        .game-container {
+            text-align: center;
+            padding: 20px;
+        }
+        .game-area {
+            width: 400px;
+            height: 600px;
+            background: #1a1a1a;
+            margin: 0 auto;
+            position: relative;
+            border: 2px solid #00ffea;
+            overflow: hidden;
+        }
+        .car {
+            width: 50px;
+            height: 100px;
+            background: #00ffea;
+            position: absolute;
+            bottom: 20px;
+            left: 175px;
+            border-radius: 10px;
+        }
+        .obstacle {
+            width: 50px;
+            height: 100px;
+            background: #ff4444;
+            position: absolute;
+            top: -100px;
+            border-radius: 10px;
+        }
+        .score {
+            font-size: 2rem;
+            color: #00ffea;
+            margin: 20px 0;
+        }
+        .back-btn {
+            background: #ff4444;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: bold;
+            padding: 12px 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 0 15px #ff4444;
+            transition: background 0.3s ease;
+            margin-top: 20px;
+        }
+        .back-btn:hover {
+            background: #cc3333;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Cyber Strike 2077 - Racing Game</h1>
+        <div class="score">Score: <span id="score">0</span></div>
+        <div class="game-area" id="game-area">
+            <div class="car" id="car"></div>
+        </div>
+        <button class="back-btn" id="pause-btn" onclick="pauseGame()">Pause</button>
+        <button class="back-btn" id="continue-btn" onclick="continueGame()" style="display: none;">Continue</button>
+        <button class="back-btn" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+    </div>
+    <script>
+        const gameArea = document.getElementById('game-area');
+        const car = document.getElementById('car');
+        const pauseBtn = document.getElementById('pause-btn');
+        const continueBtn = document.getElementById('continue-btn');
+        let score = 0;
+        let gameOver = false;
+        let paused = false;
+        let pausedTime;
+        let obstacles = [];
+
+        function createObstacle() {
+            const obstacle = document.createElement('div');
+            obstacle.classList.add('obstacle');
+            obstacle.style.left = Math.floor(Math.random() * (gameArea.clientWidth - 50)) + 'px';
+            obstacle.style.top = '-100px';
+            gameArea.appendChild(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function moveObstacles() {
+            const speed = 8 + Math.floor(score / 6);
+            obstacles.forEach((obstacle, index) => {
+                let top = parseInt(obstacle.style.top);
+                if (top > gameArea.clientHeight) {
+                    obstacle.remove();
+                    obstacles.splice(index, 1);
+                    score++;
+                    document.getElementById('score').textContent = score;
+                } else {
+                    obstacle.style.top = (top + speed) + 'px';
+                    if (checkCollision(car, obstacle)) {
+                        endGame();
+                    }
+                }
+            });
+        }
+
+        function checkCollision(rect1, rect2) {
+            const r1 = rect1.getBoundingClientRect();
+            const r2 = rect2.getBoundingClientRect();
+            return !(r1.right < r2.left || 
+                     r1.left > r2.right || 
+                     r1.bottom < r2.top || 
+                     r1.top > r2.bottom);
+        }
+
+        function endGame() {
+            gameOver = true;
+            const currentHigh = parseInt(localStorage.getItem('cyberHighScore') || 0);
+            if (score > currentHigh) {
+                localStorage.setItem('cyberHighScore', score);
+            }
+            alert('Game Over! Your score: ' + score);
+            window.location.href = 'dashboard.html';
+        }
+
+        function moveCar(e) {
+            if (gameOver || paused) return;
+            const rect = gameArea.getBoundingClientRect();
+            let x = e.clientX - rect.left - car.offsetWidth / 2;
+            if (x < 0) x = 0;
+            if (x > gameArea.clientWidth - car.offsetWidth) x = gameArea.clientWidth - car.offsetWidth;
+            car.style.left = x + 'px';
+        }
+
+        function pauseGame() {
+            paused = true;
+            pauseBtn.style.display = 'none';
+            continueBtn.style.display = 'inline-block';
+            // Pause time tracking by storing paused time
+            pausedTime = Date.now();
+        }
+
+        function continueGame() {
+            paused = false;
+            continueBtn.style.display = 'none';
+            pauseBtn.style.display = 'inline-block';
+            // Resume time tracking by adjusting startTime
+            startTime += Date.now() - pausedTime;
+        }
+
+        document.addEventListener('mousemove', moveCar);
+
+        setInterval(() => {
+            if (!gameOver && !paused) createObstacle();
+        }, 1000);
+
+        setInterval(() => {
+            if (!gameOver && !paused) moveObstacles();
+        }, 30);
+
+        // Track play time
+        let startTime;
+        window.addEventListener('load', () => {
+            startTime = Date.now();
+        });
+        window.addEventListener('beforeunload', () => {
+            const username = localStorage.getItem('userUsername') || 'guest';
+            const elapsedHours = (Date.now() - startTime) / 1000 / 3600;
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            let total = parseFloat(localStorage.getItem(`${username}_playTime_${today}`) || 0);
+            total += elapsedHours;
+            localStorage.setItem(`${username}_playTime_${today}`, total);
+
+            // Also update totalHoursToday for dashboard
+            const todayDateString = new Date().toDateString();
+            let playDate = localStorage.getItem(`${username}_playDate`);
+            let totalToday = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0);
+            if (playDate !== todayDateString) {
+                totalToday = 0;
+                localStorage.setItem(`${username}_playDate`, todayDateString);
+            }
+            totalToday += elapsedHours;
+            localStorage.setItem(`${username}_hoursToday`, totalToday);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>User Profile</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="profile-container">
+            <h1>User Profile</h1>
+            <div class="profile-image-section">
+                <img id="profile-image" src="" alt="Profile Image" style="width: 150px; height: 150px; border-radius: 50%; object-fit: cover; display: none;" />
+                <label for="image-upload" style="display: block; margin-top: 10px; cursor: pointer; color: #00ffea; text-decoration: underline;">Choose Profile Image</label>
+                <input type="file" id="image-upload" accept="image/*" style="display: none;" />
+                <button id="upload-btn" class="btn" style="margin-top: 10px;">Upload Image</button>
+            </div>
+            <div class="profile-info" style="margin-top: 20px;">
+                <div class="profile-item">
+                    <label>Username:</label>
+                    <span id="profile-username"></span>
+                </div>
+                <div class="profile-item">
+                    <label>Email:</label>
+                    <span id="profile-email"></span>
+                </div>
+                <div class="profile-item">
+                    <label>Phone:</label>
+                    <span id="profile-phone"></span>
+                </div>
+            </div>
+            <div class="profile-info" style="margin-top: 20px;">
+                <h2>Daily Play Time History</h2>
+                <ul id="play-time-history" style="list-style-type: none; padding: 0;"></ul>
+            </div>
+            <button class="btn" onclick="window.location.href='dashboard.html'" style="margin-top: 20px;">Back to Dashboard</button>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            const username = localStorage.getItem('userUsername') || 'Not set';
+            const email = localStorage.getItem('userEmail') || 'Not set';
+            const phone = localStorage.getItem('userPhone') || 'Not set';
+            document.getElementById('profile-username').textContent = username;
+            document.getElementById('profile-email').textContent = email;
+
+            // Function to make country code clickable
+            const countryMap = {
+                '+1': 'United_States',
+                '+44': 'United_Kingdom',
+                '+91': 'India',
+                '+86': 'China',
+                '+81': 'Japan'
+            };
+            const phoneElement = document.getElementById('profile-phone');
+            if (phone !== 'Not set' && phone.includes(' ')) {
+                const [code, number] = phone.split(' ', 2);
+                const country = countryMap[code];
+                if (country) {
+                    phoneElement.innerHTML = `<a href="https://en.wikipedia.org/wiki/${country}" target="_blank">${code}</a> ${number}`;
+                } else {
+                    phoneElement.textContent = phone;
+                }
+            } else {
+                phoneElement.textContent = phone;
+            }
+
+            // Load profile image
+            const storedImage = localStorage.getItem('userProfileImage');
+            if (storedImage) {
+                document.getElementById('profile-image').src = storedImage;
+                document.getElementById('profile-image').style.display = 'block';
+            }
+
+            // Load daily play time history
+            const historyList = document.getElementById('play-time-history');
+            const entries = [];
+            const keys = Object.keys(localStorage).filter(key => key.startsWith(`${username}_playTime_`));
+            keys.forEach(key => {
+                const dateStr = key.substring(username.length + 10); // Remove username_playTime_
+                const hours = parseFloat(localStorage.getItem(key)).toFixed(2);
+                entries.push({date: new Date(dateStr), display: `${dateStr}: ${hours} hours`});
+            });
+            // Add today's entry if not already present
+            const today = new Date();
+            const todayStr = today.toDateString();
+            const todayKey = `${username}_playTime_${todayStr}`;
+            if (!keys.includes(todayKey)) {
+                const totalToday = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0).toFixed(2);
+                entries.push({date: today, display: `${todayStr}: ${totalToday} hours`});
+            }
+            // Sort entries by date descending
+            entries.sort((a, b) => b.date - a.date);
+            // Clear and repopulate the list
+            historyList.innerHTML = '';
+            entries.forEach(entry => {
+                const li = document.createElement('li');
+                li.textContent = entry.display;
+                historyList.appendChild(li);
+            });
+        });
+
+        document.getElementById('upload-btn').addEventListener('click', () => {
+            const fileInput = document.getElementById('image-upload');
+            const file = fileInput.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const imageData = e.target.result;
+                    localStorage.setItem('userProfileImage', imageData);
+                    document.getElementById('profile-image').src = imageData;
+                    document.getElementById('profile-image').style.display = 'block';
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+    </script>
+</body>
+</html>

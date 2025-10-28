@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>pixel-warriors Game</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        .game-container {
+            text-align: center;
+            padding: 20px;
+        }
+        .score {
+            font-size: 2rem;
+            color: #00ffea;
+            margin-bottom: 20px;
+        }
+        .game-area {
+            width: 400px;
+            height: 400px;
+            background: url('si.svg') no-repeat center center;
+            background-size: cover;
+            margin: 0 auto;
+            position: relative;
+            border: 2px solid #00ffea;
+            overflow: hidden;
+        }
+        .ground {
+            width: 100%;
+            height: 10px;
+            background: #8B4513;
+            position: absolute;
+            bottom: 0;
+        }
+        #player {
+            width: 42px;
+            height: 43px;
+            background-image: url('OIP (7).jpeg');
+            background-size: cover;
+            background-position: center;
+            position: absolute;
+            bottom: 10px;
+            left: 50px;
+            border-radius: 5px;
+        }
+        .obstacle {
+            width: 20px;
+            height: 60px;
+            background: #0c4c0c;
+            position: absolute;
+            bottom: 10px;
+        }
+        .flying-obstacle {
+            width: 20px;
+            height: 20px;
+            background: #ff0000;
+            position: absolute;
+            bottom: 70px;
+        }
+        .back-btn {
+            background: #ff4444;
+            border: none;
+            border-radius: 8px;
+            color: #fff;
+            font-weight: bold;
+            padding: 12px 25px;
+            cursor: pointer;
+            font-size: 1rem;
+            box-shadow: 0 0 15px #ff4444;
+            transition: background 0.3s ease;
+            margin-top: 20px;
+        }
+        .back-btn:hover {
+            background: #cc3333;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <h1>Pixel-Worriors Game</h1>
+        <div class="score">Score: <span id="score">0</span></div>
+        <div class="game-area" id="game-area">
+            <div id="player"></div>
+            <div class="ground"></div>
+        </div>
+        <button class="back-btn" id="pause-btn" onclick="pauseGame()">Pause</button>
+        <button class="back-btn" id="continue-btn" onclick="continueGame()" style="display: none;">Continue</button>
+        <button class="back-btn" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+    </div>
+    <script>
+        const gameArea = document.getElementById('game-area');
+        const player = document.getElementById('player');
+        const scoreEl = document.getElementById('score');
+        const pauseBtn = document.getElementById('pause-btn');
+        const continueBtn = document.getElementById('continue-btn');
+        let score = 0;
+        let playerY = 0;
+        let playerVY = 0;
+        const gravity = -0.5;
+        const jumpStrength = 9.5;
+        let obstacles = [];
+        let gameRunning = true;
+        let paused = false;
+        let pausedTime;
+
+        function jump() {
+            if (playerY === 0 && !paused) {
+                playerVY = jumpStrength;
+            }
+        }
+
+        function createObstacle() {
+            const obstacle = document.createElement('div');
+            const isFlying = Math.random() < 0.5; // 50% chance for flying obstacle
+            if (isFlying) {
+                obstacle.className = 'flying-obstacle';
+                obstacle.style.bottom = '70px';
+            } else {
+                obstacle.className = 'obstacle';
+                obstacle.style.bottom = '10px';
+            }
+            obstacle.style.left = '400px';
+            gameArea.appendChild(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        function moveObstacles() {
+            const speed = 6 + Math.floor(score / 8);
+            obstacles.forEach((obstacle, index) => {
+                const left = parseFloat(obstacle.style.left);
+                obstacle.style.left = (left - speed) + 'px';
+                if (left < -20) {
+                    obstacle.remove();
+                    obstacles.splice(index, 1);
+                    score++;
+                    scoreEl.textContent = score;
+                }
+                // Collision
+                const obstacleRect = obstacle.getBoundingClientRect();
+                const playerRect = player.getBoundingClientRect();
+                if (obstacleRect.right > playerRect.left && obstacleRect.left < playerRect.right &&
+                    obstacleRect.bottom > playerRect.top && obstacleRect.top < playerRect.bottom) {
+                    gameRunning = false;
+                    const currentHigh = parseInt(localStorage.getItem('pixelHighScore') || 0);
+                    if (score > currentHigh) {
+                        localStorage.setItem('pixelHighScore', score);
+                    }
+                    alert('Game Over! Score: ' + score);
+                    window.location.href = 'dashboard.html';
+                }
+            });
+        }
+
+        function updatePlayer() {
+            playerVY += gravity;
+            playerY += playerVY;
+            if (playerY < 0) {
+                playerY = 0;
+                playerVY = 0;
+            }
+            player.style.bottom = (10 + playerY) + 'px';
+        }
+
+        function pauseGame() {
+            paused = true;
+            pauseBtn.style.display = 'none';
+            continueBtn.style.display = 'inline-block';
+            // Pause time tracking by storing paused time
+            pausedTime = Date.now();
+        }
+
+        function continueGame() {
+            paused = false;
+            continueBtn.style.display = 'none';
+            pauseBtn.style.display = 'inline-block';
+            // Resume time tracking by adjusting startTime
+            startTime += Date.now() - pausedTime;
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault();
+                jump();
+            }
+        });
+
+        gameArea.addEventListener('click', jump);
+
+        setInterval(() => {
+            if (gameRunning && !paused) {
+                updatePlayer();
+                moveObstacles();
+            }
+        }, 20);
+
+        setInterval(() => {
+            if (gameRunning && !paused) createObstacle();
+        }, 1500);
+
+        // Track play time
+        let startTime;
+        window.addEventListener('load', () => {
+            startTime = Date.now();
+        });
+        window.addEventListener('beforeunload', () => {
+            const username = localStorage.getItem('userUsername') || 'guest';
+            const elapsedHours = (Date.now() - startTime) / 1000 / 3600;
+            const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+            let total = parseFloat(localStorage.getItem(`${username}_playTime_${today}`) || 0);
+            total += elapsedHours;
+            localStorage.setItem(`${username}_playTime_${today}`, total);
+
+            // Also update totalHoursToday for dashboard
+            const todayDateString = new Date().toDateString();
+            let playDate = localStorage.getItem(`${username}_playDate`);
+            let totalToday = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0);
+            if (playDate !== todayDateString) {
+                totalToday = 0;
+                localStorage.setItem(`${username}_playDate`, todayDateString);
+            }
+            totalToday += elapsedHours;
+            localStorage.setItem(`${username}_hoursToday`, totalToday);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gamer Login & Signup</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="container">
+        <div class="form-container">
+            <div class="toggle-buttons">
+                <button id="login-toggle" class="active">Login</button>
+                <button id="signup-toggle">Sign Up</button>
+            </div>
+            <form id="login-form" class="form active">
+                <h2>Login</h2>
+                <input type="text" placeholder="Username" required />
+                <input type="password" placeholder="Password" required />
+                <button type="submit" class="btn">Log In</button>
+            </form>
+            <form id="signup-form" class="form">
+                <h2>Sign Up</h2>
+                <input type="text" placeholder="Username" required />
+                <input type="email" placeholder="Email" required />
+                <div class="phone-container">
+                    <label for="country-code" style="display: block;">Country Code:</label>
+                    <div class="country-code-links">
+                        <a href="#" data-code="+1" class="country-link">+1 (USA)</a>
+                        <a href="#" data-code="+44" class="country-link">+44 (UK)</a>
+                        <a href="#" data-code="+91" class="country-link">+91 (India)</a>
+                        <a href="#" data-code="+86" class="country-link">+86 (China)</a>
+                        <a href="#" data-code="+81" class="country-link">+81 (Japan)</a>
+                        <!-- Add more country codes as needed -->
+                    </div>
+                    <input type="hidden" id="country-code" name="country-code" required />
+                    <input type="tel" id="phone-number" placeholder="Phone Number" required />
+                </div>
+                <input type="password" placeholder="Password" required />
+                <input type="password" placeholder="Confirm Password" required />
+                <button type="submit" class="btn">Sign Up</button>
+            </form>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Gamer Dashboard</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="dashboard-container">
+        <header class="dashboard-header">
+            <h1>Welcome to Your Quiet Arena!</h1>
+            <p>Ready to level up your gaming experience?</p>
+        </header>
+
+        <div class="dashboard-content">
+            <div class="dashboard-card">
+                <h2>Game Stats</h2>
+                <div class="stats">
+                    <div class="stat">
+                        <span class="stat-number" id="games-played">0</span>
+                        <span class="stat-label">Games Played</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-number" id="achievements">0</span>
+                        <span class="stat-label">Achievements</span>
+                    </div>
+                <div class="stat">
+                    <span class="stat-number" id="hours-today">0</span>
+                    <span class="stat-label">Hours Today</span>
+                </div>
+                </div>
+            </div>
+
+            <div class="dashboard-card">
+                <h2>Recent Games</h2>
+                <ul class="game-list">
+                    <li><a href="cyber-strike.html" style="color:#00ffea; text-decoration:none;">Cyber Strike 2077</a></li>
+                    <li><a href="chess.html" style="color:#00ffea; text-decoration:none;">Chess</a></li>
+                    <li><a href="pixel-warriors.html" style="color:#00ffea; text-decoration:none;">Pixel Warriors</a></li>
+                    <li><a href="space-command.html" style="color:#00ffea; text-decoration:none;">Sudoku</a></li>
+                    <li><a href="level devil.html" style="color:#00ffea; text-decoration:none;">Level Devil</a></li>
+                </ul>
+            </div>
+
+            <div class="dashboard-card">
+                <h2>Quick Actions</h2>
+                <div class="actions">
+                    <button class="action-btn" onclick="startNewGame()">Start New Game</button>
+                    <button class="action-btn" onclick="viewLeaderboard()">View Leaderboard</button>
+                    <button class="action-btn" onclick="window.location.href='profile.html'">Profile</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="leaderboard" style="display: none; margin-top: 20px;">
+            <h2>Leaderboard</h2>
+            <div class="score-item">Cyber Strike: <span id="cyber-high">0</span></div>
+            <div class="score-item">Sudoku: <span id="sudoku-high">0</span></div>
+            <div class="score-item">Pixel Warriors: <span id="pixel-high">0</span></div>
+            <div class="score-item">chess: <span id="chess">0</span></div>
+            <button onclick="hideLeaderboard()" style="background: #ff4444; border: none; border-radius: 8px; color: #fff; padding: 10px 20px; cursor: pointer;">Close</button>
+        </div>
+
+        <button class="logout-btn" onclick="logout()">Logout</button>
+    </div>
+
+    <script src="stats.js"></script>
+    <script>
+        function logout() {
+            window.location.href = 'login.html';
+        }
+
+        function startNewGame() {
+            const games = ['cyber-strike.html', 'chess.html', 'pixel-warriors.html', 'space-command.html', 'level devil.html'];
+            const randomGame = games[Math.floor(Math.random() * games.length)];
+            window.open(randomGame, '_blank');
+        }
+
+        function viewLeaderboard() {
+            document.getElementById('leaderboard').style.display = 'block';
+        }
+
+        function hideLeaderboard() {
+            document.getElementById('leaderboard').style.display = 'none';
+        }
+
+        // Load dynamic data
+        window.addEventListener('load', () => {
+            const username = localStorage.getItem('userUsername') || 'guest';
+
+            // Load user-specific stats
+            const gamesPlayed = localStorage.getItem(`${username}_gamesPlayed`) || '0';
+            const achievements = localStorage.getItem(`${username}_achievements`) || '0';
+            document.getElementById('games-played').textContent = gamesPlayed;
+            document.getElementById('achievements').textContent = achievements;
+
+            // Hours today
+            const today = new Date().toDateString();
+            const playDate = localStorage.getItem(`${username}_playDate`);
+            let total = 0;
+            if (playDate === today) {
+                total = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0);
+            }
+            // Convert total hours to HH:MM:SS format
+            const hours = Math.floor(total);
+            const minutes = Math.floor((total - hours) * 60);
+            const seconds = Math.floor(((total - hours) * 60 - minutes) * 60);
+            const formattedTime = `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            document.getElementById('hours-today').textContent = formattedTime;
+
+            // High scores
+            document.getElementById('cyber-high').textContent = localStorage.getItem(`${username}_cyberHighScore`) || 0;
+            document.getElementById('sudoku-high').textContent = localStorage.getItem(`${username}_sudokuHighScore`) || 0;
+            document.getElementById('pixel-high').textContent = localStorage.getItem(`${username}_pixelHighScore`) || 0;
+            document.getElementById('chess').textContent = localStorage.getItem(`${username}_chessHighScore`) || 0;
+        });
+    </script>
+</body>
+</html>

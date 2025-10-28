@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Sudoku Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background: #1a1a1a;
+      color: #00ffea;
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    #sudoku-board {
+      display: grid;
+      gap: 1px;
+      margin: 0 auto;
+      width: fit-content;
+      border: 2px solid #00ffea;
+    }
+
+    input.cell {
+      width: 38px;
+      height: 38px;
+      text-align: center;
+      font-size: 18px;
+      border: 1px solid #aaa;
+      outline: none;
+      box-shadow: 0 0 5px #00ffea;
+    }
+
+    input.cell:disabled {
+      background-color: #e0e0e0;
+      font-weight: bold;
+    }
+
+    #buttons {
+      margin-top: 20px;
+    }
+
+    button {
+      padding: 10px 20px;
+      margin: 0 10px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+
+    .back-btn {
+      background: #ff4444;
+      border: none;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: bold;
+      padding: 12px 25px;
+      cursor: pointer;
+      font-size: 1rem;
+      box-shadow: 0 0 15px #ff4444;
+      transition: background 0.3s ease;
+      margin-top: 20px;
+    }
+
+    .back-btn:hover {
+      background: #cc3333;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>Sudoku Game</h1>
+  <div id="sudoku-board"></div>
+
+  <div id="buttons">
+    <button onclick="checkBoard()">Check</button>
+    <button onclick="resetBoard()">Reset</button>
+  </div>
+
+  <button class="back-btn" onclick="window.location.href='dashboard.html'">Back to Dashboard</button>
+
+  <script>
+    const boards = {
+      easy: {
+        size: 3,
+        initial: [
+          [1, '', ''],
+          ['', 2, ''],
+          ['', '', 3]
+        ],
+        solution: [
+          [1,3,2],
+          [3,2,1],
+          [2,1,3]
+        ]
+      },
+      medium: {
+        size: 6,
+        initial: [
+          [1, '', 3, '', 5, ''],
+          ['', 2, '', 1, '', 6],
+          [2, '', 4, '', 1, ''],
+          ['', 1, '', 3, '', 2],
+          [3, '', 2, '', 5, ''],
+          ['', 5, '', 4, '', 3]
+        ],
+        solution: [
+          [1,6,3,2,5,4],
+          [4,2,5,1,6,3],
+          [2,3,4,5,1,6],
+          [5,1,6,3,4,2],
+          [3,4,2,6,5,1],
+          [6,5,1,4,2,3]
+        ]
+      },
+      hard: {
+        size: 9,
+        initial: [
+          [8,2,7,1,5,'',3,9,6],
+          [9,6,5,3,2,7,1,'',8],
+          [3,'',1,'',8,9,7,5,2],
+          [5,9,'',4,6,'',2,7,1],
+          [4,7,2,5,'',3,9,8,6],
+          [6,1,8,'',7,'',4,3,5],
+          [7,8,6,2,3,5,'',1,9],
+          ['',5,4,'',9,6,8,2,3],
+          [2,3,'',8,4,1,6,7,'']
+        ],
+        solution: [
+          [8,2,7,1,5,4,3,9,6],
+          [9,6,5,3,2,7,1,4,8],
+          [3,4,1,6,8,9,7,5,2],
+          [5,9,3,4,6,8,2,7,1],
+          [4,7,2,5,1,3,9,8,6],
+          [6,1,8,9,7,2,4,3,5],
+          [7,8,6,2,3,5,4,1,9],
+          [1,5,4,7,9,6,8,2,3],
+          [2,3,9,8,4,1,6,7,5]
+        ]
+      },
+      extreme: {
+        size: 9,
+        initial: [
+          [7,3,'','',1,'','',9,2],
+          [8,4,'','',7,'',5,'',6],
+          ['','','',2,'',5,3,'',''],
+          [2,'','',3,'','','',7,''],
+          [4,'','','',5,7,9,'',''],
+          ['','',9,'','','','',3,''],
+          [1,'','','',3,'',6,'',9],
+          ['','','','',7,'',8,1,3],
+          ['','','','','',1,'','',4]
+        ],
+        solution: [
+          [7,3,5,6,1,4,8,9,2],
+          [8,4,2,9,7,3,5,1,6],
+          [9,6,1,2,8,5,3,4,7],
+          [2,8,6,3,4,9,1,7,5],
+          [4,1,3,8,5,7,9,2,6],
+          [5,7,9,1,2,6,4,3,8],
+          [1,2,8,4,3,7,6,5,9],
+          [6,9,4,5,7,2,8,1,3],
+          [3,5,7,6,9,1,2,8,4]
+        ]
+      },
+      'extreme hard': {
+        size: 9,
+        initial: [
+          [9,'','','','','','','',6],
+          ['','','','','','','','',1],
+          ['','','','','',2,7,5,8],
+          [8,'','','',6,'','','',''],
+          ['','',2,8,'','','','',7],
+          ['','',7,'',2,'','','',''],
+          [7,'','','','','',6,'',3],
+          ['',2,'','','','',8,5,''],
+          [1,'',5,'',3,'',2,'',8]
+        ],
+        solution: [
+          [9,7,8,3,1,5,4,2,6],
+          [2,5,4,6,8,7,3,9,1],
+          [3,1,6,9,4,2,7,5,8],
+          [8,3,9,7,6,1,5,4,2],
+          [5,4,2,8,9,3,6,1,7],
+          [6,8,7,4,2,5,9,3,1],
+          [7,9,1,2,5,8,6,4,3],
+          [4,2,3,1,7,6,8,5,9],
+          [1,6,5,9,3,4,2,7,8]
+        ]
+      }
+    };
+
+    let selectedDifficulty;
+    let initialBoard;
+    let solution;
+
+    const boardElement = document.getElementById('sudoku-board');
+    let wrongAttempts = 0;
+
+    function createBoard() {
+      boardElement.innerHTML = '';
+      const size = boards[selectedDifficulty].size;
+      boardElement.style.gridTemplateColumns = `repeat(${size}, 40px)`;
+      boardElement.style.gridTemplateRows = `repeat(${size}, 40px)`;
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.maxLength = 1;
+          input.classList.add('cell');
+          input.dataset.row = row;
+          input.dataset.col = col;
+
+          const value = initialBoard[row][col];
+          if (value !== '') {
+            input.value = value;
+            input.disabled = true;
+          }
+
+          // Allow only 1–size digits and check against solution on blur
+          input.addEventListener('blur', () => {
+            const val = input.value;
+            const regex = new RegExp(`^[1-${size}]$`);
+            if (!regex.test(val)) {
+              input.value = '';
+              return;
+            }
+            const row = parseInt(input.dataset.row);
+            const col = parseInt(input.dataset.col);
+            if (parseInt(val) !== solution[row][col]) {
+              wrongAttempts++;
+              alert(`Wrong number! Attempts left: ${3 - wrongAttempts}`);
+              if (wrongAttempts >= 3) {
+                alert('Game Over! You have made 3 wrong attempts.');
+                // Disable all inputs
+                document.querySelectorAll('.cell:not([disabled])').forEach(cell => cell.disabled = true);
+              }
+            }
+          });
+
+          boardElement.appendChild(input);
+        }
+      }
+    }
+
+    function getCurrentBoard() {
+      const cells = document.querySelectorAll('.cell');
+      const board = [];
+      const size = boards[selectedDifficulty].size;
+      for (let i = 0; i < size; i++) {
+        board[i] = [];
+        for (let j = 0; j < size; j++) {
+          const index = i * size + j;
+          const value = cells[index].value;
+          board[i][j] = value ? parseInt(value) : '';
+        }
+      }
+      return board;
+    }
+
+    function checkBoard() {
+      const board = getCurrentBoard();
+      const size = boards[selectedDifficulty].size;
+      // Check for empty cells
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+          if (board[row][col] === '') {
+            alert('Board is not complete!');
+            return;
+          }
+        }
+      }
+      // Check against solution
+      let isCorrect = true;
+      for (let row = 0; row < size; row++) {
+        for (let col = 0; col < size; col++) {
+          if (board[row][col] !== solution[row][col]) {
+            isCorrect = false;
+            break;
+          }
+        }
+        if (!isCorrect) break;
+      }
+      if (isCorrect) {
+        alert('You Win!');
+        // Disable all inputs
+        document.querySelectorAll('.cell:not([disabled])').forEach(cell => cell.disabled = true);
+      } else {
+        alert('You Lose!');
+        // Disable all inputs
+        document.querySelectorAll('.cell:not([disabled])').forEach(cell => cell.disabled = true);
+      }
+    }
+
+    function resetBoard() {
+      wrongAttempts = 0;
+      createBoard();
+    }
+
+    function selectDifficulty() {
+      selectedDifficulty = prompt('Select difficulty: easy, medium, hard, extreme, extreme hard');
+      if (!boards[selectedDifficulty]) {
+        alert('Invalid difficulty. Defaulting to medium.');
+        selectedDifficulty = 'medium';
+      }
+      initialBoard = boards[selectedDifficulty].initial;
+      solution = boards[selectedDifficulty].solution;
+      createBoard();
+    }
+
+    // Initialize
+    selectDifficulty();
+
+    // Track play time
+    let startTime;
+    window.addEventListener('load', () => {
+      startTime = Date.now();
+    });
+    window.addEventListener('beforeunload', () => {
+      const username = localStorage.getItem('userUsername') || 'guest';
+      const elapsedHours = (Date.now() - startTime) / 1000 / 3600;
+      const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+      let total = parseFloat(localStorage.getItem(`${username}_playTime_${today}`) || 0);
+      total += elapsedHours;
+      localStorage.setItem(`${username}_playTime_${today}`, total);
+
+      // Also update totalHoursToday for dashboard
+      const todayDateString = new Date().toDateString();
+      let playDate = localStorage.getItem(`${username}_playDate`);
+      let totalToday = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0);
+      if (playDate !== todayDateString) {
+        totalToday = 0;
+        localStorage.setItem(`${username}_playDate`, todayDateString);
+      }
+      totalToday += elapsedHours;
+      localStorage.setItem(`${username}_hoursToday`, totalToday);
+    });
+  </script>
+
+</body>
+</html>

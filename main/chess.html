@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>2D Chess — Single File</title>
+  <style>
+    :root{--light:#f0d9b5;--dark:#b58863;--highlight:rgba(50,200,50,0.45);--danger:rgba(200,50,50,0.35)}
+    body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:18px;color:#000000;}
+    .wrap{display:flex;gap:20px;align-items:flex-start}
+    .board{display:grid;grid-template-columns:repeat(8,64px);grid-template-rows:repeat(8,64px);border:6px solid #333;border-radius:8px;box-shadow:0 6px 20px rgba(0,0,0,0.15)}
+    .cell{width:64px;height:64px;display:flex;align-items:center;justify-content:center;font-size:36px;cursor:pointer;user-select:none}
+    .cell.light{background:var(--light)}
+    .cell.dark{background:var(--dark)}
+    .cell.highlight{background:var(--highlight)!important}
+    .cell.capture{background:var(--danger)!important}
+    .cell.check{background:red!important}
+    .info{max-width:360px}
+    .controls{display:flex;gap:8px;margin-bottom:12px}
+    button{padding:8px 12px;border-radius:6px;border:1px solid #bbb;background:white;cursor:pointer}
+    .status{padding:10px;border-radius:6px;background:#fff;border:1px solid #eee;margin-bottom:8px}
+    .history{max-height:420px;overflow:auto;background:#fff;padding:8px;border-radius:6px;border:1px solid #eee}
+    .coords{font-size:10px;color:#444;margin-top:4px}
+  </style>
+</head>
+<body>
+  <h2>2D Chess — Single-file playable board</h2>
+  <div class="wrap">
+    <div id="board" class="board" aria-label="Chess board"></div>
+    <div class="info">
+      <div class="controls">
+        <button id="newBtn">New Game</button>
+        <button id="undoBtn">Undo</button>
+        <button id="pvpBtn">Player vs Player</button>
+        <button id="pvcBtn">Player vs Computer</button>
+      </div>
+      <div class="status" id="status">Turn: White</div>
+      <div class="history" id="history"><strong>Moves:</strong><ol id="movesList"></ol></div>
+      <div class="coords">Click a piece to see legal moves. Promotion auto-promotes to queen. Castling & en-passant not implemented.</div>
+    </div>
+  </div>
+
+<script>
+// Unicode piece symbols
+const PIECE_SYMBOLS = {
+  'K-white': '♔','Q-white':'♕','R-white':'♖','B-white':'♗','N-white':'♘','P-white':'♙',
+  'K-black': '♚','Q-black':'♛','R-black':'♜','B-black':'♝','N-black':'♞','P-black':'♟'
+}
+
+let boardEl = document.getElementById('board');
+let statusEl = document.getElementById('status');
+let movesList = document.getElementById('movesList');
+let newBtn = document.getElementById('newBtn');
+let undoBtn = document.getElementById('undoBtn');
+let pvpBtn = document.getElementById('pvpBtn');
+let pvcBtn = document.getElementById('pvcBtn');
+
+let state = { board: null, turn: 'white', selected: null, history: [], fullMoves: [], mode: 'pvp' };
+let cells = [];
+
+function coordToAlgebraic(r,c){ return String.fromCharCode( 'a'.charCodeAt(0)+c ) + (8-r); }
+
+function initBoard(){
+  // 8x8 array of null or {type,color}
+  const emptyRow = ()=>Array(8).fill(null);
+  let b = Array.from({length:8},emptyRow);
+  // pawns
+  for(let c=0;c<8;c++){ b[1+6][c]=null } // placeholder (not used)
+  // Setup standard initial position
+  const backWhite = ['R','N','B','Q','K','B','N','R'];
+  const backBlack = ['R','N','B','Q','K','B','N','R'];
+  for(let c=0;c<8;c++){
+    b[6][c] = {type:'P',color:'white'};
+    b[1][c] = {type:'P',color:'black'};
+    b[7][c] = {type:backWhite[c],color:'white'};
+    b[0][c] = {type:backBlack[c],color:'black'};
+  }
+  state.board = b;
+  state.turn = 'white';
+  state.selected = null;
+  state.history = [];
+  state.fullMoves = [];
+}
+
+function drawBoard(){
+  boardEl.innerHTML='';
+  cells = [];
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      let cell = document.createElement('div');
+      cell.className = 'cell ' + (((r+c)%2===0)?'light':'dark');
+      cell.dataset.r = r; cell.dataset.c = c;
+      const piece = state.board[r][c];
+      if(piece){ cell.textContent = PIECE_SYMBOLS[piece.type + '-' + piece.color]; }
+      cell.addEventListener('click', onCellClick);
+      boardEl.appendChild(cell);
+      cells.push(cell);
+    }
+  }
+  updateStatus();
+}
+
+function updateStatus(msg){
+  let s = msg ? msg : `Turn: ${capitalize(state.turn)}`;
+  statusEl.textContent = s;
+}
+
+function capitalize(s){ return s.charAt(0).toUpperCase()+s.slice(1); }
+
+function onCellClick(e){
+  const r = +e.currentTarget.dataset.r; const c = +e.currentTarget.dataset.c;
+  const piece = state.board[r][c];
+  clearHighlights();
+  if(state.selected){
+    // attempt to move
+    const [sr,sc] = state.selected;
+    const legal = getLegalMoves(sr,sc).map(m=>m.r+'_'+m.c);
+    if(legal.includes(r+'_'+c)){
+      makeMove(sr,sc,r,c);
+      state.selected = null;
+      drawBoard();
+      checkGameState();
+      return;
+    }
+  }
+  // select if piece of current turn
+  if(piece && piece.color === state.turn){
+    state.selected = [r,c];
+    highlightSelected(r,c);
+    const moves = getLegalMoves(r,c);
+    for(const m of moves){
+      const idx = m.r*8 + m.c;
+      const el = cells[idx];
+      if(state.board[m.r][m.c]) el.classList.add('capture'); else el.classList.add('highlight');
+    }
+  } else {
+    state.selected = null;
+  }
+}
+
+function clearHighlights(){
+  cells.forEach(el=>{ el.classList.remove('highlight','capture','selected','check'); });
+}
+
+function highlightSelected(r,c){ clearHighlights(); const el = cells[r*8+c]; el.classList.add('selected'); }
+
+function cloneBoard(b){ return b.map(row=>row.map(cell=> cell ? {...cell} : null)); }
+
+function makeMove(sr,sc, tr,tc){
+  const piece = state.board[sr][sc];
+  const captured = state.board[tr][tc];
+  // record history for undo
+  state.history.push({board: cloneBoard(state.board), turn: state.turn});
+  // move
+  state.board[tr][tc] = piece;
+  state.board[sr][sc] = null;
+  // pawn promotion
+  if(piece.type==='P'){
+    if((piece.color==='white' && tr===0) || (piece.color==='black' && tr===7)){
+      state.board[tr][tc] = {type:'Q',color:piece.color};
+      updateStatus(`${capitalize(piece.color)} pawn promoted to Queen!`);
+    }
+  }
+  // save move to move list
+  const moveText = `${pieceNotation(piece)} ${coordToAlgebraic(sr,sc)} → ${coordToAlgebraic(tr,tc)}${captured? ' x':''}`;
+  appendMove(moveText);
+  // switch turn
+  state.turn = (state.turn==='white') ? 'black' : 'white';
+  // if PVC mode and it's computer's turn, make computer move
+  if(state.mode === 'pvc' && state.turn === 'black'){
+    setTimeout(makeComputerMove, 1000); // delay for better UX
+  }
+}
+
+function appendMove(text){ const li = document.createElement('li'); li.textContent = text; movesList.appendChild(li); }
+
+function undo(){ if(state.history.length===0) return; const last = state.history.pop(); state.board = last.board; state.turn = last.turn; // remove last move from DOM
+  if(movesList.lastChild) movesList.removeChild(movesList.lastChild); drawBoard(); updateStatus('Move undone.'); }
+
+undoBtn.addEventListener('click', ()=>undo());
+newBtn.addEventListener('click', ()=>{ initBoard(); movesList.innerHTML=''; drawBoard(); updateStatus('New game. White to move.'); });
+pvpBtn.addEventListener('click', ()=>{ state.mode = 'pvp'; updateStatus('Player vs Player mode selected.'); });
+pvcBtn.addEventListener('click', ()=>{ state.mode = 'pvc'; updateStatus('Player vs Computer mode selected.'); });
+
+// Movement generation
+function getLegalMoves(r,c){
+  const piece = state.board[r][c]; if(!piece) return [];
+  const pseudo = getPseudoLegalMoves(r,c,piece);
+  // filter out moves that leave own king in check
+  const legal = [];
+  for(const m of pseudo){
+    const copy = cloneBoard(state.board);
+    copy[m.r][m.c] = {...piece}; copy[r][c] = null;
+    // handle pawn promotion simulation (promote to Q)
+    if(piece.type==='P' && ((piece.color==='white' && m.r===0) || (piece.color==='black' && m.r===7))){ copy[m.r][m.c] = {type:'Q',color:piece.color}; }
+    if(!isKingInCheckAfter(copy, piece.color)) legal.push(m);
+  }
+  return legal;
+}
+
+function isKingInCheckAfter(boardCopy, color){
+  // find king
+  let kr=-1,kc=-1;
+  for(let i=0;i<8;i++)for(let j=0;j<8;j++){
+    const p = boardCopy[i][j]; if(p && p.type==='K' && p.color===color){ kr=i;kc=j; }
+  }
+  if(kr===-1) return true; // should not happen
+  // check if any opponent piece attacks king
+  const opp = (color==='white')?'black':'white';
+  return squareAttacked(boardCopy, kr,kc, opp);
+}
+
+function isInCheck(color){ return isKingInCheckAfter(state.board,color); }
+
+function squareAttacked(boardCopy, r,c, attackerColor){
+  // generate all pseudo moves for attacker pieces and see if any target r,c
+  for(let i=0;i<8;i++)for(let j=0;j<8;j++){
+    const p = boardCopy[i][j]; if(!p || p.color!==attackerColor) continue;
+    const moves = getPseudoLegalMoves(i,j,p, boardCopy);
+    for(const m of moves) if(m.r===r && m.c===c) return true;
+  }
+  return false;
+}
+
+function getPseudoLegalMoves(r,c,piece, boardParam){
+  const board = boardParam || state.board;
+  const moves = [];
+  const dirKnight = [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]];
+  const dirKing = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+  function inside(rr,cc){ return rr>=0 && rr<8 && cc>=0 && cc<8; }
+  if(piece.type==='P'){
+    const forward = (piece.color==='white')?-1:1;
+    const startRow = (piece.color==='white')?6:1;
+    // one step
+    if(inside(r+forward,c) && !board[r+forward][c]) moves.push({r:r+forward,c});
+    // two steps
+    if(r===startRow && !board[r+forward][c] && !board[r+2*forward][c]) moves.push({r:r+2*forward,c});
+    // captures
+    for(const dc of [-1,1]){
+      const rr=r+forward, cc=c+dc;
+      if(inside(rr,cc) && board[rr][cc] && board[rr][cc].color!==piece.color) moves.push({r:rr,c:cc});
+    }
+    // note: en-passant not implemented
+  } else if(piece.type==='N'){
+    for(const d of dirKnight){ const rr=r+d[0], cc=c+d[1]; if(inside(rr,cc) && (!board[rr][cc] || board[rr][cc].color!==piece.color)) moves.push({r:rr,c:cc}); }
+  } else if(piece.type==='B' || piece.type==='R' || piece.type==='Q'){
+    const dirs = [];
+    if(piece.type==='B' || piece.type==='Q') dirs.push([-1,-1],[-1,1],[1,-1],[1,1]);
+    if(piece.type==='R' || piece.type==='Q') dirs.push([-1,0],[1,0],[0,-1],[0,1]);
+    for(const d of dirs){
+      let rr=r+d[0], cc=c+d[1];
+      while(inside(rr,cc)){
+        if(!board[rr][cc]){ moves.push({r:rr,c:cc}); }
+        else { if(board[rr][cc].color!==piece.color) moves.push({r:rr,c:cc}); break; }
+        rr+=d[0]; cc+=d[1];
+      }
+    }
+  } else if(piece.type==='K'){
+    for(const d of dirKing){ const rr=r+d[0], cc=c+d[1]; if(inside(rr,cc) && (!board[rr][cc] || board[rr][cc].color!==piece.color)) moves.push({r:rr,c:cc}); }
+    // castling not implemented
+  }
+  return moves;
+}
+
+function checkGameState(){
+  // after a move was made, check opponent's legal moves
+  const opp = state.turn;
+  // gather all legal moves for opponent
+  let anyLegal=false;
+  for(let i=0;i<8;i++) for(let j=0;j<8;j++){
+    const p = state.board[i][j]; if(!p || p.color!==opp) continue;
+    if(getLegalMoves(i,j).length>0) { anyLegal=true; break; }
+  }
+  const inCheck = isInCheck(opp);
+  if(!anyLegal){
+    if(inCheck){
+      const message = `${capitalize(state.turn)} is checkmated. ${capitalize(state.turn==='white'?'black':'white')} wins!`;
+      updateStatus(message);
+      alert(message); // Signal for checkmate
+      // Highlight the king in check
+      highlightKingInCheck(opp);
+    } else {
+      updateStatus(`Stalemate — draw.`);
+    }
+  } else if(inCheck){
+    updateStatus(`${capitalize(state.turn)} is in check.`);
+    // Highlight the king in check
+    highlightKingInCheck(opp);
+  } else {
+    updateStatus();
+  }
+}
+
+// small helpers
+function pieceNotation(piece){ return piece.type + (piece.color==='white'?'w':'b'); }
+
+function highlightKingInCheck(color){
+  // find king
+  for(let i=0;i<8;i++)for(let j=0;j<8;j++){
+    const p = state.board[i][j]; if(p && p.type==='K' && p.color===color){
+      const idx = i*8 + j;
+      cells[idx].classList.add('check');
+      return;
+    }
+  }
+}
+
+function makeComputerMove(){
+  // collect all legal moves for black
+  const allMoves = [];
+  for(let r=0;r<8;r++){
+    for(let c=0;c<8;c++){
+      const piece = state.board[r][c];
+      if(piece && piece.color === 'black'){
+        const moves = getLegalMoves(r,c);
+        for(const m of moves){
+          allMoves.push({from:{r,c}, to:m});
+        }
+      }
+    }
+  }
+  if(allMoves.length === 0) return; // no moves, game over
+  // pick random move
+  const randomMove = allMoves[Math.floor(Math.random() * allMoves.length)];
+  makeMove(randomMove.from.r, randomMove.from.c, randomMove.to.r, randomMove.to.c);
+  drawBoard();
+  checkGameState();
+}
+
+// initialize
+initBoard(); drawBoard(); updateStatus('New game. White to move.');
+
+</script>
+</body>
+</html>

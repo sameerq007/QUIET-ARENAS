@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Level: Devil — HTML5 Canvas Game</title>
+<style>
+  :root{
+    --bg:#0b0b0f;
+    --panel:#111218;
+    --accent:#ff4d4d;
+    --text:#e8e8f0;
+  }
+  html,body{height:100%;margin:0;font-family:Inter,system-ui,Segoe UI,Roboto,Arial;}
+  body{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background: radial-gradient(1000px 400px at 10% 10%, #1a0815 0%, var(--bg) 30%), linear-gradient(180deg,#12030a 0%, #050407 100%);
+    color:var(--text);
+  }
+
+  .wrap{
+    width:920px;
+    max-width:95vw;
+    display:grid;
+    grid-template-columns: 1fr 300px;
+    gap:18px;
+    align-items:start;
+  }
+
+  canvas{
+    width:100%;
+    height:auto;
+    background: linear-gradient(180deg, rgba(255,255,255,0.02), transparent 40%), repeating-linear-gradient(180deg, rgba(255,255,255,0.01) 0 2px, transparent 2px 24px);
+    border-radius:12px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.02);
+    display:block;
+  }
+
+  .panel{
+    background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+    border-radius:12px;
+    padding:16px;
+    min-height:600px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.5);
+    color:var(--text);
+  }
+
+  h1{margin:0 0 8px;font-size:20px}
+  p.small{margin:6px 0 12px;color:#bfc3d9;font-size:13px}
+
+  .stat{display:flex;flex-direction:row;justify-content:space-between;padding:8px 0;border-top:1px dashed rgba(255,255,255,0.03)}
+  .stat strong{font-size:16px}
+  .controls{font-size:14px;margin-top:8px;line-height:1.6}
+  .btn{
+    display:inline-block;margin-top:12px;padding:8px 10px;border-radius:8px;background:linear-gradient(180deg,#ff6b6b,#ff3b3b);
+    color:white;text-decoration:none;font-weight:600;border:none;cursor:pointer;
+    box-shadow:0 6px 18px rgba(255,60,60,0.12);
+  }
+
+  .small-muted{font-size:12px;color:#9ea0b8}
+  footer{margin-top:12px;font-size:12px;color:#9ea0b8}
+
+  /* Mobile touch controls */
+  .touch-controls{display:flex;gap:8px;margin-top:14px;}
+  .touch-btn{flex:1;padding:12px;border-radius:10px;background:#0f1014;color:#cfcfe3;text-align:center;user-select:none;-webkit-user-select:none}
+  .touch-btn:active{transform:translateY(1px)}
+
+  /* Mobile responsiveness */
+  @media (max-width: 768px) {
+    .wrap {
+      grid-template-columns: 1fr;
+      gap: 12px;
+    }
+    .panel {
+      width: 100%;
+      min-height: auto;
+    }
+  }
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <div>
+      <canvas id="game" width="1600" height="1066"></canvas>
+    </div>
+
+    <aside class="panel">
+      <h1>Level: Devil 🔥</h1>
+      <p class="small">Defend the realm — move left/right and shoot devils. Reach the boss score to summon the Devil Boss. Survive and win!</p>
+
+      <div class="stat"><div class="small-muted">Score</div><strong id="uiScore">0</strong></div>
+      <div class="stat"><div class="small-muted">Lives</div><strong id="uiLives">3</strong></div>
+      <div class="stat"><div class="small-muted">Level</div><strong id="uiLevel">Devil</strong></div>
+      <div class="stat"><div class="small-muted">Enemy Count</div><strong id="uiEnemies">0</strong></div>
+
+      <div class="controls">
+        <div><strong>Keyboard</strong></div>
+        <div>← / → : Move</div>
+        <div>Space : Shoot</div>
+
+        <div style="margin-top:10px"><strong>Touch</strong></div>
+        <div class="touch-controls" id="touchControls">
+          <div class="touch-btn" id="leftBtn">◀</div>
+          <div class="touch-btn" id="shootBtn">●</div>
+          <div class="touch-btn" id="rightBtn">▶</div>
+        </div>
+
+        <button id="restart" class="btn">Restart Game</button>
+        <button id="pause" class="btn">Pause</button>
+        <button id="backToDashboard" class="btn">Back to Dashboard</button>
+      </div>
+
+      <footer>
+        <div class="small-muted"><strong></strong>. Try to reach <strong>score 15</strong> to spawn the Devil Boss.</div>
+      </footer>
+    </aside>
+  </div>
+
+<script src="stats.js"></script>
+<script>
+/*
+  Level: Devil — a small canvas shooter
+  - Player moves left/right, shoots bullets upward
+  - Devil enemies spawn and move downward, shoot occasionally
+  - At score threshold, Devil Boss appears
+  - Simple collision detection and UI
+*/
+
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W = canvas.width;
+let H = canvas.height;
+
+const uiScore = document.getElementById('uiScore');
+const uiLives = document.getElementById('uiLives');
+const uiEnemies = document.getElementById('uiEnemies');
+
+let keys = {};
+let touch = {left:false,right:false,shoot:false};
+
+document.addEventListener('keydown', e=> {
+  keys[e.code]=true;
+  if(e.code === 'KeyP' && !gameOver){
+    paused = !paused;
+    if(!paused){
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+  }
+});
+document.addEventListener('keyup', e=> keys[e.code]=false);
+
+// Touch controls
+const leftBtn = document.getElementById('leftBtn'),
+      rightBtn = document.getElementById('rightBtn'),
+      shootBtn = document.getElementById('shootBtn');
+
+[leftBtn,rightBtn,shootBtn].forEach(el=>{
+  el.addEventListener('touchstart', e=> { e.preventDefault(); if(el===leftBtn) touch.left=true; if(el===rightBtn) touch.right=true; if(el===shootBtn) touch.shoot=true; });
+  el.addEventListener('touchend', e=> { e.preventDefault(); if(el===leftBtn) touch.left=false; if(el===rightBtn) touch.right=false; if(el===shootBtn) touch.shoot=false; });
+  el.addEventListener('mousedown', e=> { e.preventDefault(); if(el===leftBtn) touch.left=true; if(el===rightBtn) touch.right=true; if(el===shootBtn) touch.shoot=true; });
+  el.addEventListener('mouseup', e=> { e.preventDefault(); if(el===leftBtn) touch.left=false; if(el===rightBtn) touch.right=false; if(el===shootBtn) touch.shoot=false; });
+});
+
+// Utility
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function rand(min,max){return Math.random()*(max-min)+min;}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+
+// Game state
+let player, bullets, enemies, enemyBullets, lastTime, spawnTimer, score, lives, levelState, gameOver, paused;
+const BOSS_SCORE = 15;
+
+function resetGame(){
+  W = canvas.width = Math.floor(Math.max(600, innerWidth*1.2));
+  H = canvas.height = Math.floor(W * 0.66);
+  player = {x:W/2, y:H-80, r:20, speed:360, cooldown:0};
+  bullets = [];
+  enemies = [];
+  enemyBullets = [];
+  spawnTimer = 0;
+  score = 0;
+  lives = 3;
+  levelState = {bossPresent:false, boss:null};
+  gameOver = false;
+  paused = false;
+  lastTime = performance.now();
+  uiScore.textContent = score;
+  uiLives.textContent = lives;
+  uiEnemies.textContent = enemies.length;
+
+  // Increment gamesPlayed when starting a new game
+  const username = localStorage.getItem('userUsername');
+  if (username) {
+    incrementUserStat(username, 'gamesPlayed');
+  }
+}
+
+function spawnEnemy(){
+  const size = rand(18,28);
+  const ex = rand(size, W-size);
+  const ey = -40;
+  const speed = rand(60,140);
+  enemies.push({
+    x:ex,y:ey,r:size,speed:speed, hp: size>25?3:1, wobble: rand(0,Math.PI*2), shootCooldown: rand(1.2,3)
+  });
+}
+
+function spawnBoss(){
+  const b = {
+    x: W/2, y: -120, w:200, h:120, hp: 24, speedX: 120, phase:0, timer:0
+  };
+  levelState.bossPresent = true;
+  levelState.boss = b;
+}
+
+// Input processing
+function processInput(dt){
+  let left = keys['ArrowLeft']||keys['KeyA']||touch.left;
+  let right = keys['ArrowRight']||keys['KeyD']||touch.right;
+  let shootKey = keys['Space']||touch.shoot;
+
+  if(left && !right) player.x -= player.speed * dt;
+  if(right && !left) player.x += player.speed * dt;
+  player.x = clamp(player.x, player.r, W-player.r);
+
+  player.cooldown -= dt;
+  if(shootKey && player.cooldown <= 0){
+    player.cooldown = 0.24;
+    bullets.push({x:player.x, y:player.y - player.r - 8, r:6, speed:450});
+  }
+}
+
+// Update
+function update(dt){
+  if(gameOver || paused) return;
+
+  processInput(dt);
+
+  // bullets
+  for(let i=bullets.length-1;i>=0;i--){
+    let b = bullets[i];
+    b.y -= b.speed * dt;
+    if(b.y < -10) bullets.splice(i,1);
+  }
+
+  // enemies spawn
+  spawnTimer -= dt;
+  if(!levelState.bossPresent){
+    if(spawnTimer <= 0){
+      spawnTimer = rand(0.5, 1.1);
+      spawnEnemy();
+    }
+  }
+
+  // enemies update
+  enemies.forEach(e=>{
+    e.y += e.speed * dt;
+    e.wobble += dt * 3;
+    e.x += Math.sin(e.wobble) * 20 * dt;
+    e.shootCooldown -= dt;
+    if(e.shootCooldown <= 0){
+      e.shootCooldown = rand(1.5, 3.2);
+      enemyBullets.push({x:e.x,y:e.y+e.r, vx:0, vy:160, r:6});
+    }
+  });
+
+  // boss behavior
+  if(levelState.bossPresent && levelState.boss){
+    let b = levelState.boss;
+    // entrance
+    if(b.y < 120){
+      b.y += 80 * dt;
+    } else {
+      b.timer += dt;
+      // horizontal patrol
+      b.x += Math.sin(b.timer*0.8) * b.speedX * dt;
+      b.x = clamp(b.x, b.w/2, W - b.w/2);
+      // boss shoots volleys
+      if(b.timer > 0.9){
+        b.timer = 0;
+        // shoot several bullets downward in spread
+        const bulletsCount = 6;
+        for(let i=0;i<bulletsCount;i++){
+          const angle = (i/(bulletsCount-1) - 0.5) * Math.PI/3;
+          enemyBullets.push({
+            x: b.x + Math.cos(angle)*50,
+            y: b.y + b.h/2 - 10,
+            vx: Math.sin(angle)*120,
+            vy: 200,
+            r:8
+          });
+        }
+      }
+    }
+  }
+
+  // enemy bullets update
+  for(let i=enemyBullets.length-1;i>=0;i--){
+    let eb = enemyBullets[i];
+    eb.x += (eb.vx||0) * dt;
+    eb.y += eb.vy * dt;
+    if(eb.y > H + 40 || eb.x < -40 || eb.x > W+40) enemyBullets.splice(i,1);
+  }
+
+  // bullet hits enemy
+  for(let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    for(let j=bullets.length-1;j>=0;j--){
+      const b = bullets[j];
+      if(Math.hypot(e.x-b.x, e.y-b.y) < e.r + b.r){
+        // hit
+        bullets.splice(j,1);
+        e.hp -= 1;
+        if(e.hp <= 0){
+          // kill
+          enemies.splice(i,1);
+          score += 1 + Math.floor(e.r/20);
+          uiScore.textContent = score;
+        }
+        break;
+      }
+    }
+  }
+
+  // bullet hits boss
+  if(levelState.bossPresent && levelState.boss){
+    const b = levelState.boss;
+    for(let j=bullets.length-1;j>=0;j--){
+      const bl = bullets[j];
+      if(bl.x > b.x - b.w/2 && bl.x < b.x + b.w/2 && bl.y > b.y - b.h/2 && bl.y < b.y + b.h/2){
+        bullets.splice(j,1);
+        b.hp -= 1;
+        score += 0.2; // small incremental score
+        uiScore.textContent = Math.floor(score);
+        if(b.hp <= 0){
+          // boss defeated -> win
+          levelState.boss = null;
+          levelState.bossPresent = false;
+          gameWin();
+        }
+      }
+    }
+  }
+
+  // enemies reach player or off screen
+  for(let i=enemies.length-1;i>=0;i--){
+    const e = enemies[i];
+    if(e.y > H + 40) enemies.splice(i,1);
+    else if(dist(e, player) < e.r + player.r){
+      // collision with player
+      enemies.splice(i,1);
+      playerHit();
+    }
+  }
+
+  // enemy bullets hit player
+  for(let i=enemyBullets.length-1;i>=0;i--){
+    const eb = enemyBullets[i];
+    if(Math.hypot(eb.x - player.x, eb.y - player.y) < eb.r + player.r){
+      enemyBullets.splice(i,1);
+      playerHit();
+    }
+  }
+
+  // update UI enemy count
+  uiEnemies.textContent = enemies.length + (levelState.bossPresent?1:0);
+
+  // spawn boss when score threshold hit
+  if(score >= BOSS_SCORE && !levelState.bossPresent){
+    spawnBoss();
+  }
+}
+
+function playerHit(){
+  lives -= 1;
+  uiLives.textContent = lives;
+  // reset player position briefly
+  player.x = W/2;
+  bullets = [];
+  if(lives <= 0){
+    gameOver = true;
+    setTimeout(()=>showGameOver(), 400);
+  }
+}
+
+function showGameOver(){
+  // popup overlay
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle = '#fff';
+  ctx.textAlign = 'center';
+  ctx.font = '48px system-ui';
+  ctx.fillText('Game Over', W/2, H/2 - 10);
+  ctx.font = '20px system-ui';
+  ctx.fillText('Press Restart to play again', W/2, H/2 + 30);
+  ctx.restore();
+}
+
+function gameWin(){
+  gameOver = true;
+  // Update user stats on win
+  const username = localStorage.getItem('userUsername');
+  if (username) {
+    incrementUserStat(username, 'achievements'); // Assuming winning counts as an achievement
+    updateUserHighScore(username, 'levelDevilHighScore', Math.floor(score));
+    updateUserHoursToday(username, 0.1); // Example: add 0.1 hours for winning
+  }
+  // show victory card
+  ctx.save();
+  ctx.fillStyle = 'rgba(0,0,0,0.5)';
+  ctx.fillRect(0,0,W,H);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ffd6d6';
+  ctx.font = '44px system-ui';
+  ctx.fillText('Devil Defeated!', W/2, H/2 - 10);
+  ctx.font = '20px system-ui';
+  ctx.fillStyle = '#ffd6d6';
+  ctx.fillText('You cleared Level: Devil — Congrats!', W/2, H/2 + 28);
+  ctx.restore();
+}
+
+// Render functions
+function drawPlayer(p){
+  // halo
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(p.x, p.y - p.r - 8, p.r*0.9, p.r*0.35, 0, 0, Math.PI*2);
+  ctx.fillStyle = 'rgba(255,255,180,0.06)';
+  ctx.fill();
+  // body
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, p.r, 0, Math.PI*2);
+  ctx.fillStyle = '#5fb0ff';
+  ctx.fill();
+  // eyes
+  ctx.fillStyle = '#031022';
+  ctx.beginPath(); ctx.arc(p.x-7, p.y-4, 3,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(p.x+7, p.y-4, 3,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+function drawEnemy(e){
+  // small devil: red circle with horns
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  // body
+  ctx.beginPath();
+  ctx.arc(0,0,e.r,0,Math.PI*2);
+  ctx.fillStyle = 'rgba(255,76,76,1)';
+  ctx.fill();
+  // horns
+  ctx.beginPath();
+  ctx.moveTo(-e.r*0.6,-e.r*0.3);
+  ctx.quadraticCurveTo(-e.r*1.2,-e.r*1.1, -e.r*0.2, -e.r*0.9);
+  ctx.fillStyle = '#2d0606';
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(e.r*0.6,-e.r*0.3);
+  ctx.quadraticCurveTo(e.r*1.2,-e.r*1.1, e.r*0.2, -e.r*0.9);
+  ctx.fillStyle = '#2d0606';
+  ctx.fill();
+
+  // eyes
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.ellipse(-e.r*0.33, -e.r*0.1, e.r*0.18, e.r*0.12,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(e.r*0.33, -e.r*0.1, e.r*0.18, e.r*0.12,0,0,Math.PI*2); ctx.fill();
+
+  ctx.fillStyle = '#2d0606';
+  ctx.beginPath(); ctx.arc(-e.r*0.33, -e.r*0.1, e.r*0.07,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(e.r*0.33, -e.r*0.1, e.r*0.07,0,Math.PI*2); ctx.fill();
+
+  ctx.restore();
+}
+
+function drawEnemyBullet(b){
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(b.x,b.y,b.r,0,Math.PI*2);
+  ctx.fillStyle = '#ffb3b3';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBullet(b){
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(b.x-2,b.y-12,4,12);
+  ctx.fillStyle = '#fff1a6';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawBoss(b){
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  // body (rect)
+  ctx.beginPath();
+  ctx.roundRect = function(x,y,w,h,r){
+    const rt = Math.min(r, w/2, h/2);
+    ctx.moveTo(x+rt,y);
+    ctx.arcTo(x+w,y,x+w,y+h,rt);
+    ctx.arcTo(x+w,y+h,x,y+h,rt);
+    ctx.arcTo(x,y+h,x,y,rt);
+    ctx.arcTo(x,y,x+w,y,rt);
+  };
+  ctx.fillStyle = '#7b1111';
+  ctx.beginPath();
+  ctx.roundRect(-b.w/2, -b.h/2, b.w, b.h, 26);
+  ctx.fill();
+
+  // eyes
+  ctx.fillStyle = '#fff6f6';
+  ctx.beginPath(); ctx.ellipse(-50,-18,18,10,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(50,-18,18,10,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#2a0000';
+  ctx.beginPath(); ctx.arc(-50,-18,6,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(50,-18,6,0,Math.PI*2); ctx.fill();
+
+  // grin
+  ctx.fillStyle = '#ff9b9b';
+  ctx.beginPath();
+  ctx.ellipse(0,8,70,24,0,0,Math.PI);
+  ctx.fill();
+
+  // horns (big)
+  ctx.fillStyle = '#2b0000';
+  ctx.beginPath();
+  ctx.moveTo(-b.w/2+20, -b.h/2 + 6);
+  ctx.quadraticCurveTo(-b.w/2 - 40, -b.h*0.9, -b.w/2 + 40, -b.h/2 + 40);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(b.w/2-20, -b.h/2 + 6);
+  ctx.quadraticCurveTo(b.w/2 + 40, -b.h*0.9, b.w/2 - 40, -b.h/2 + 40);
+  ctx.fill();
+
+  // HP bar
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.fillRect(-b.w/2, b.h/2 + 12, b.w, 12);
+  ctx.fillStyle = '#ff8b8b';
+  const hpPercent = Math.max(0, b.hp / 24);
+  ctx.fillRect(-b.w/2 + 2, b.h/2 + 14, (b.w-4) * hpPercent, 8);
+
+  ctx.restore();
+}
+
+function render(){
+  // background
+  ctx.clearRect(0,0,W,H);
+  // subtle stars
+  for(let i=0;i<60;i++){
+    ctx.fillStyle = 'rgba(255,255,255,0.02)';
+    ctx.fillRect((i*73)%W, (i*41)%H, 1, 1);
+  }
+
+  // draw player
+  drawPlayer(player);
+
+  // draw bullets
+  bullets.forEach(drawBullet);
+
+  // draw enemies
+  enemies.forEach(drawEnemy);
+
+  // draw enemy bullets
+  enemyBullets.forEach(drawEnemyBullet);
+
+  // draw boss if any
+  if(levelState.bossPresent && levelState.boss){
+    drawBoss(levelState.boss);
+  }
+
+  // HUD top-left small text
+  ctx.save();
+  ctx.fillStyle = '#d6d6ff';
+  ctx.font = '14px system-ui';
+  ctx.textAlign = 'left';
+   ctx.fillText('Level: Devil', 16, 24);
+  ctx.restore();
+
+  // paused overlay
+  if(paused){
+    ctx.save();
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    ctx.fillRect(0,0,W,H);
+    ctx.fillStyle = '#fff';
+    ctx.textAlign = 'center';
+    ctx.font = '48px system-ui';
+    ctx.fillText('Paused', W/2, H/2 - 10);
+    ctx.font = '20px system-ui';
+    ctx.fillText('Press P to resume', W/2, H/2 + 30);
+    ctx.restore();
+  }
+
+  // if game over overlays are handled elsewhere
+}
+
+// Main loop
+function loop(now){
+  const dt = Math.min(0.04, (now - lastTime) / 1000);
+  lastTime = now;
+  update(dt);
+  render();
+  if(!gameOver && !paused) requestAnimationFrame(loop);
+}
+
+document.getElementById('restart').addEventListener('click', ()=>{
+  resetGame();
+  requestAnimationFrame(loop);
+});
+
+document.getElementById('pause').addEventListener('click', ()=>{
+  if(!gameOver){
+    paused = !paused;
+    if(!paused){
+      lastTime = performance.now();
+      requestAnimationFrame(loop);
+    }
+  }
+});
+
+document.getElementById('backToDashboard').addEventListener('click', ()=>{
+  window.location.href = 'dashboard.html';
+});
+
+// initial start
+resetGame();
+requestAnimationFrame(loop);
+
+// Track play time
+let startTime;
+window.addEventListener('load', () => {
+    startTime = Date.now();
+});
+window.addEventListener('beforeunload', () => {
+    const username = localStorage.getItem('userUsername') || 'guest';
+    if (username !== 'guest') {
+        const elapsedHours = (Date.now() - startTime) / 1000 / 3600;
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD format
+        let total = parseFloat(localStorage.getItem(`${username}_playTime_${today}`) || 0);
+        total += elapsedHours;
+        localStorage.setItem(`${username}_playTime_${today}`, total);
+
+        // Also update totalHoursToday for dashboard
+        const todayDateString = new Date().toDateString();
+        let playDate = localStorage.getItem(`${username}_playDate`);
+        let totalToday = parseFloat(localStorage.getItem(`${username}_hoursToday`) || 0);
+        if (playDate !== todayDateString) {
+            totalToday = 0;
+            localStorage.setItem(`${username}_playDate`, todayDateString);
+        }
+        totalToday += elapsedHours;
+        localStorage.setItem(`${username}_hoursToday`, totalToday);
+    }
+});
+
+// Make canvas responsive when window resizes (keeps aspect)
+let resizeTimeout;
+window.addEventListener('resize', ()=>{
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(()=>{
+    // scale canvas to container width while retaining intrinsic size for crispness
+    const container = canvas.parentElement;
+    const cw = container.clientWidth;
+    canvas.style.width = Math.max(320, cw) + 'px';
+  }, 50);
+});
+</script>
+</body>
+</html>
